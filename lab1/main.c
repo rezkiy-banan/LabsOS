@@ -14,7 +14,29 @@
 #define GREEN_COLOR "\033[32m"
 #define CYAN_COLOR "\033[36m"
 
-// Функция для обработки и вывода списка файлов
+
+int file_name_cmp(const void *a, const void *b) {
+    const char *name_a = *(const char **)a;
+    const char *name_b = *(const char **)b;
+
+    
+    if (strcmp(name_a, ".") == 0) return -1;
+    if (strcmp(name_b, ".") == 0) return 1;
+    if (strcmp(name_a, "..") == 0) return -1;
+    if (strcmp(name_b, "..") == 0) return 1;
+
+    return strcmp(name_a, name_b);  
+}
+
+void print_symlink_target(const char *filepath) {
+    char link_target[1024];
+    ssize_t len = readlink(filepath, link_target, sizeof(link_target) - 1);
+    if (len != -1) {
+        link_target[len] = '\0';
+        printf(" -> %s", link_target);
+    }
+}
+
 void list_directory(const char *dir_name, int show_hidden, int long_format) {
     DIR *dir;
     struct dirent *entry;
@@ -27,14 +49,11 @@ void list_directory(const char *dir_name, int show_hidden, int long_format) {
         return;
     }
 
-    // Массив для хранения имён файлов
     char *file_names[1024];
     int count = 0;
     long total_blocks = 0;
 
-    // Чтение содержимого директории
     while ((entry = readdir(dir)) != NULL) {
-        // Если не нужно показывать скрытые файлы и файл скрыт, пропускаем его
         if (!show_hidden && entry->d_name[0] == '.') {
             continue;
         }
@@ -45,31 +64,27 @@ void list_directory(const char *dir_name, int show_hidden, int long_format) {
             continue;
         }
 
-        // Подсчёт общего количества блоков
         total_blocks += file_stat.st_blocks;
-
         file_names[count++] = strdup(entry->d_name);
     }
     closedir(dir);
 
-    // Сортировка списка файлов
-    qsort(file_names, count, sizeof(char *), (int (*)(const void *, const void *)) strcmp);
+    
+    qsort(file_names, count, sizeof(char *), file_name_cmp);
 
-    // Вывод строки "total"
     if (long_format) {
-        printf("total %ld\n", total_blocks / 2);  // В некоторых системах используется деление на 2
+        printf("total %ld\n", total_blocks / 2);  
     }
 
-    // Вывод информации о каждом файле
     for (int i = 0; i < count; i++) {
         snprintf(filepath, sizeof(filepath), "%s/%s", dir_name, file_names[i]);
-        
+
         if (lstat(filepath, &file_stat) == -1) {
             perror("lstat");
             continue;
         }
 
-        // Определение типа файла и выбор цвета
+        
         if (S_ISDIR(file_stat.st_mode)) {
             file_type_color = BLUE_COLOR;
         } else if (S_ISLNK(file_stat.st_mode)) {
@@ -80,10 +95,11 @@ void list_directory(const char *dir_name, int show_hidden, int long_format) {
             file_type_color = RESET_COLOR;
         }
 
-        // Длинный формат вывода
+        
         if (long_format) {
-            // Права доступа
-            printf((S_ISDIR(file_stat.st_mode)) ? "d" : "-");
+    
+            printf((S_ISDIR(file_stat.st_mode)) ? "d" :
+                   (S_ISLNK(file_stat.st_mode)) ? "l" : "-");
             printf((file_stat.st_mode & S_IRUSR) ? "r" : "-");
             printf((file_stat.st_mode & S_IWUSR) ? "w" : "-");
             printf((file_stat.st_mode & S_IXUSR) ? "x" : "-");
@@ -93,34 +109,37 @@ void list_directory(const char *dir_name, int show_hidden, int long_format) {
             printf((file_stat.st_mode & S_IROTH) ? "r" : "-");
             printf((file_stat.st_mode & S_IWOTH) ? "w" : "-");
             printf((file_stat.st_mode & S_IXOTH) ? "x" : "-");
+            printf(" %2ld", (long) file_stat.st_nlink);
+            printf(" %-8s", getpwuid(file_stat.st_uid)->pw_name);
+            printf(" %-8s", getgrgid(file_stat.st_gid)->gr_name);
+            printf(" %8ld", (long) file_stat.st_size);
 
-            // Количество ссылок, владелец, группа, размер
-            printf(" %ld", (long) file_stat.st_nlink);
-            printf(" %s", getpwuid(file_stat.st_uid)->pw_name);
-            printf(" %s", getgrgid(file_stat.st_gid)->gr_name);
-            printf(" %5ld", (long) file_stat.st_size);
-
-            // Время изменения
+            
             char timebuf[64];
             struct tm *tm_info = localtime(&file_stat.st_mtime);
             strftime(timebuf, sizeof(timebuf), "%b %d %H:%M", tm_info);
             printf(" %s ", timebuf);
         }
 
-        // Имя файла с цветом
-        printf("%s%s%s\n", file_type_color, file_names[i], RESET_COLOR);
+        
+        printf("%s%s%s", file_type_color, file_names[i], RESET_COLOR);
+
+    
+        if (S_ISLNK(file_stat.st_mode)) {
+            print_symlink_target(filepath);
+        }
+
+        printf("\n");
         free(file_names[i]);
     }
 }
 
-// Основная функция программы
 int main(int argc, char *argv[]) {
     int opt;
     int show_hidden = 0;
     int long_format = 0;
-    char *dir_name = ".";  // по умолчанию текущая директория
+    char *dir_name = ".";  
 
-    // Обработка опций командной строки
     while ((opt = getopt(argc, argv, "la")) != -1) {
         switch (opt) {
             case 'l':
@@ -135,12 +154,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Если указан путь к директории, используем его
+    
     if (optind < argc) {
         dir_name = argv[optind];
     }
 
-    // Вызываем функцию для отображения содержимого директории
+
     list_directory(dir_name, show_hidden, long_format);
     
     return 0;
