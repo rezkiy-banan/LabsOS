@@ -14,18 +14,16 @@
 #define GREEN_COLOR "\033[32m"
 #define CYAN_COLOR "\033[36m"
 
-
 int file_name_cmp(const void *a, const void *b) {
     const char *name_a = *(const char **)a;
     const char *name_b = *(const char **)b;
 
-    
     if (strcmp(name_a, ".") == 0) return -1;
     if (strcmp(name_b, ".") == 0) return 1;
     if (strcmp(name_a, "..") == 0) return -1;
     if (strcmp(name_b, "..") == 0) return 1;
 
-    return strcmp(name_a, name_b);  
+    return strcmp(name_a, name_b);
 }
 
 void print_symlink_target(const char *filepath) {
@@ -69,7 +67,6 @@ void list_directory(const char *dir_name, int show_hidden, int long_format) {
     }
     closedir(dir);
 
-    
     qsort(file_names, count, sizeof(char *), file_name_cmp);
 
     if (long_format) {
@@ -84,7 +81,6 @@ void list_directory(const char *dir_name, int show_hidden, int long_format) {
             continue;
         }
 
-        
         if (S_ISDIR(file_stat.st_mode)) {
             file_type_color = BLUE_COLOR;
         } else if (S_ISLNK(file_stat.st_mode)) {
@@ -95,9 +91,8 @@ void list_directory(const char *dir_name, int show_hidden, int long_format) {
             file_type_color = RESET_COLOR;
         }
 
-        
         if (long_format) {
-    
+            // Вывод прав доступа
             printf((S_ISDIR(file_stat.st_mode)) ? "d" :
                    (S_ISLNK(file_stat.st_mode)) ? "l" : "-");
             printf((file_stat.st_mode & S_IRUSR) ? "r" : "-");
@@ -109,22 +104,40 @@ void list_directory(const char *dir_name, int show_hidden, int long_format) {
             printf((file_stat.st_mode & S_IROTH) ? "r" : "-");
             printf((file_stat.st_mode & S_IWOTH) ? "w" : "-");
             printf((file_stat.st_mode & S_IXOTH) ? "x" : "-");
+            
+            // Вывод количества ссылок
             printf(" %2ld", (long) file_stat.st_nlink);
-            printf(" %-8s", getpwuid(file_stat.st_uid)->pw_name);
-            printf(" %-8s", getgrgid(file_stat.st_gid)->gr_name);
+
+            // Проверка и вывод имени владельца (или UID)
+            struct passwd *pw = getpwuid(file_stat.st_uid);
+            if (pw) {
+                printf(" %-8s", pw->pw_name);
+            } else {
+                printf(" %-8u", file_stat.st_uid);
+            }
+
+            // Проверка и вывод имени группы (или GID)
+            struct group *gr = getgrgid(file_stat.st_gid);
+            if (gr) {
+                printf(" %-8s", gr->gr_name);
+            } else {
+                printf(" %-8u", file_stat.st_gid);
+            }
+
+            // Вывод размера файла
             printf(" %8ld", (long) file_stat.st_size);
 
-            
+            // Вывод времени последней модификации
             char timebuf[64];
             struct tm *tm_info = localtime(&file_stat.st_mtime);
             strftime(timebuf, sizeof(timebuf), "%b %d %H:%M", tm_info);
             printf(" %s ", timebuf);
         }
 
-        
+        // Печать имени файла
         printf("%s%s%s", file_type_color, file_names[i], RESET_COLOR);
 
-    
+        // Печать ссылки, если файл является символической ссылкой
         if (S_ISLNK(file_stat.st_mode)) {
             print_symlink_target(filepath);
         }
@@ -154,13 +167,11 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    
     if (optind < argc) {
         dir_name = argv[optind];
     }
 
-
     list_directory(dir_name, show_hidden, long_format);
-    
+
     return 0;
 }
