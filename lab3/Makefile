@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -O2
-TARGET = lab3
+TARGET = myfork
 
 all: $(TARGET)
 
