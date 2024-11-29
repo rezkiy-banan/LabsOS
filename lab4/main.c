@@ -13,48 +13,94 @@ int change_mode(const char *mode_str, const char *file) {
         return -1;
     }
 
-    mode_t new_mode = st.st_mode;
+    mode_t current_mode = st.st_mode; 
+    mode_t new_mode = current_mode;
 
     if (isdigit(mode_str[0])) {
-        // Если введено числовое представление прав доступа
+        
+        if (strlen(mode_str) > 4 || strspn(mode_str, "01234567") != strlen(mode_str)) {
+            fprintf(stderr, "Некорректное числовое представление прав доступа: %s\n", mode_str);
+            return -1;
+        }
         new_mode = strtol(mode_str, NULL, 8);
-        if (chmod(file, new_mode) == -1) {
-            perror("Ошибка изменения прав доступа");
-            return -1;
-        }
     } else {
-        // Символьное представление прав доступа
-        int add = (mode_str[1] == '+');
-        char who = mode_str[0];
-        char perm_type = mode_str[2];
+        
+        size_t len = strlen(mode_str);
+        char who = 'a'; 
+        int i = 0;
 
-        mode_t mask = 0;
-
-        // Определяем нужную маску прав в зависимости от символов
-        if (perm_type == 'r') mask = S_IRUSR | S_IRGRP | S_IROTH;
-        else if (perm_type == 'w') mask = S_IWUSR | S_IWGRP | S_IWOTH;
-        else if (perm_type == 'x') mask = S_IXUSR | S_IXGRP | S_IXOTH;
-
-        // Применяем маску для конкретного пользователя
-        if (who == 'u') mask &= S_IRWXU;
-        else if (who == 'g') mask &= S_IRWXG;
-        else if (who == 'o') mask &= S_IRWXO;
-
-        if (add) {
-            new_mode |= mask;
-        } else {
-            new_mode &= ~mask;
+        
+        if (len > 1 && (mode_str[0] == 'u' || mode_str[0] == 'g' || mode_str[0] == 'o' || mode_str[0] == 'a')) {
+            who = mode_str[0];
+            i++;
         }
 
-        // Применяем новые права
-        if (chmod(file, new_mode) == -1) {
-            perror("Ошибка изменения прав доступа");
-            return -1;
+        for (; i < len; i++) {
+            char operation = mode_str[i];
+
+            
+            if (operation != '+' && operation != '-') {
+                fprintf(stderr, "Некорректный формат режима: %s\n", mode_str);
+                return -1;
+            }
+
+            i++;
+            while (i < len && strchr("rwx", mode_str[i])) {
+                char perm_type = mode_str[i];
+                mode_t mask = 0;
+
+                
+                switch (perm_type) {
+                    case 'r': mask = S_IRUSR | S_IRGRP | S_IROTH; break;
+                    case 'w': mask = S_IWUSR | S_IWGRP | S_IWOTH; break;
+                    case 'x': mask = S_IXUSR | S_IXGRP | S_IXOTH; break;
+                    default:
+                        fprintf(stderr, "Некорректный тип прав: %c\n", perm_type);
+                        return -1;
+                }
+
+                
+                switch (who) {
+                    case 'u': mask &= S_IRWXU; break;
+                    case 'g': mask &= S_IRWXG; break;
+                    case 'o': mask &= S_IRWXO; break;
+                    case 'a':  break;
+                    default:
+                        fprintf(stderr, "Некорректный указатель пользователя: %c\n", who);
+                        return -1;
+                }
+
+                
+                if (operation == '+') {
+                    new_mode |= mask;
+                } else if (operation == '-') {
+                    new_mode &= ~mask;
+                }
+
+                i++;
+            }
+
+            
+            i--;
         }
+    }
+
+    
+    if (current_mode == new_mode) {
+        printf("Права доступа не изменены. Текущие права уже соответствуют заданным.\n");
+        return 0;
+    }
+
+    
+    if (chmod(file, new_mode) == -1) {
+        perror("Ошибка изменения прав доступа");
+        return -1;
     }
 
     return 0;
 }
+
+
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         fprintf(stderr, "Использование: %s <режим> <файл>\n", argv[0]);
