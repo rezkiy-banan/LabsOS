@@ -11,7 +11,6 @@
 #define BUFFER_SIZE 256
 #define FIFO_NAME "my_fifo"
 
-// Функция для получения текущего времени в строковом формате
 void get_current_time(char *buffer, size_t size) {
     time_t now = time(NULL);
     struct tm *time_info = localtime(&now);
@@ -31,12 +30,11 @@ void pipe_example() {
         exit(EXIT_FAILURE);
     }
 
-    if (pid == 0) { // Дочерний процесс
-        close(pipe_fd[1]); // Закрываем неиспользуемую сторону pipe (запись)
-        char buffer[BUFFER_SIZE];
+    if (pid == 0) { 
+        close(pipe_fd[1]);  
+        char buffer[BUFFER_SIZE / 2]; // Изменено
 
-        // Чтение данных из pipe
-        if (read(pipe_fd[0], buffer, BUFFER_SIZE) > 0) {
+        if (read(pipe_fd[0], buffer, BUFFER_SIZE / 2) > 0) { // Изменено
             char child_time[BUFFER_SIZE];
             get_current_time(child_time, sizeof(child_time));
             printf("Дочерний процесс:\n");
@@ -45,28 +43,25 @@ void pipe_example() {
         }
         close(pipe_fd[0]);
         exit(EXIT_SUCCESS);
-    } else { // Родительский процесс
-        close(pipe_fd[0]); // Закрываем неиспользуемую сторону pipe (чтение)
+    } else { 
+        close(pipe_fd[0]); 
 
-        // Задержка в 5 секунд
         sleep(5);
 
         char parent_time[BUFFER_SIZE];
         get_current_time(parent_time, sizeof(parent_time));
 
-        char message[BUFFER_SIZE];
+        char message[BUFFER_SIZE / 2]; // Изменено
         snprintf(message, sizeof(message), "PID: %d, Время: %s", getpid(), parent_time);
 
-        // Запись данных в pipe
         write(pipe_fd[1], message, strlen(message) + 1);
         close(pipe_fd[1]);
 
-        wait(NULL); // Ожидание завершения дочернего процесса
+        wait(NULL); 
     }
 }
 
 void fifo_example() {
-    // Создаём FIFO
     if (mkfifo(FIFO_NAME, 0666) == -1 && errno != EEXIST) {
         perror("Ошибка создания FIFO");
         exit(EXIT_FAILURE);
@@ -78,15 +73,15 @@ void fifo_example() {
         exit(EXIT_FAILURE);
     }
 
-    if (pid == 0) { // Дочерний процесс
+    if (pid == 0) { 
         int fifo_fd = open(FIFO_NAME, O_RDONLY);
         if (fifo_fd == -1) {
             perror("Ошибка открытия FIFO для чтения");
             exit(EXIT_FAILURE);
         }
 
-        char buffer[BUFFER_SIZE];
-        if (read(fifo_fd, buffer, BUFFER_SIZE) > 0) {
+        char buffer[BUFFER_SIZE / 2]; // Изменено
+        if (read(fifo_fd, buffer, BUFFER_SIZE / 2) > 0) { // Изменено
             char child_time[BUFFER_SIZE];
             get_current_time(child_time, sizeof(child_time));
             printf("Дочерний процесс:\n");
@@ -95,8 +90,7 @@ void fifo_example() {
         }
         close(fifo_fd);
         exit(EXIT_SUCCESS);
-    } else { // Родительский процесс
-        // Задержка в 5 секунд
+    } else { 
         sleep(5);
 
         int fifo_fd = open(FIFO_NAME, O_WRONLY);
@@ -108,15 +102,14 @@ void fifo_example() {
         char parent_time[BUFFER_SIZE];
         get_current_time(parent_time, sizeof(parent_time));
 
-        char message[BUFFER_SIZE];
+        char message[BUFFER_SIZE / 2]; // Изменено
         snprintf(message, sizeof(message), "PID: %d, Время: %s", getpid(), parent_time);
 
-        // Запись данных в FIFO
         write(fifo_fd, message, strlen(message) + 1);
         close(fifo_fd);
 
-        wait(NULL); // Ожидание завершения дочернего процесса
-        unlink(FIFO_NAME); // Удаление FIFO
+        wait(NULL);
+        unlink(FIFO_NAME); 
     }
 }
 

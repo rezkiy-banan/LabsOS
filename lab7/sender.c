@@ -8,6 +8,7 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <time.h>
+#include <errno.h> // Подключаем для использования errno и EEXIST
 
 #define SHM_NAME "/shared_memory"
 #define SEM_NAME "/shared_semaphore"
@@ -32,7 +33,7 @@ int main() {
     // Проверяем, есть ли уже запущенная программа
     sem = sem_open(SEM_NAME, O_CREAT | O_EXCL, 0666, 1);
     if (sem == SEM_FAILED) {
-        if (errno == EEXIST) {
+        if (errno == EEXIST) { // Обрабатываем ошибку существующего семафора
             handle_existing_instance();
         } else {
             perror("Ошибка создания семафора");
@@ -68,14 +69,15 @@ int main() {
     printf("Передающий процесс запущен. PID: %d\n", getpid());
 
     while (1) {
-        char time_buffer[BUFFER_SIZE];
+        char time_buffer[BUFFER_SIZE / 2]; // Для безопасности используем половину размера
         get_current_time(time_buffer, sizeof(time_buffer));
 
         char message[BUFFER_SIZE];
         snprintf(message, sizeof(message), "PID: %d, Время: %s", getpid(), time_buffer);
 
         sem_wait(sem);
-        strncpy(shared_memory, message, BUFFER_SIZE);
+        strncpy(shared_memory, message, BUFFER_SIZE - 1); // Гарантируем, что строка будет null-terminated
+        shared_memory[BUFFER_SIZE - 1] = '\0'; // Явно добавляем завершающий нулевой символ
         sem_post(sem);
 
         sleep(1);
