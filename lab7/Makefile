@@ -10,4 +10,5 @@ receiver: receiver.c
 	$(CC) $(CFLAGS) -o receiver receiver.c -lrt -pthread
 
 clean:
-	rm -f sender receiver
+	rm -f sender receiver sender.lock shmfile
+

@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/stat.h> // Для mkfifo
 
 #define BUFFER_SIZE 256
 #define FIFO_NAME "my_fifo"
@@ -32,9 +33,9 @@ void pipe_example() {
 
     if (pid == 0) { 
         close(pipe_fd[1]);  
-        char buffer[BUFFER_SIZE / 2]; // Изменено
+        char buffer[BUFFER_SIZE];
 
-        if (read(pipe_fd[0], buffer, BUFFER_SIZE / 2) > 0) { // Изменено
+        if (read(pipe_fd[0], buffer, BUFFER_SIZE) > 0) {
             char child_time[BUFFER_SIZE];
             get_current_time(child_time, sizeof(child_time));
             printf("Дочерний процесс:\n");
@@ -48,10 +49,10 @@ void pipe_example() {
 
         sleep(5);
 
-        char parent_time[BUFFER_SIZE];
+        char parent_time[BUFFER_SIZE/2];
         get_current_time(parent_time, sizeof(parent_time));
 
-        char message[BUFFER_SIZE / 2]; // Изменено
+        char message[BUFFER_SIZE];
         snprintf(message, sizeof(message), "PID: %d, Время: %s", getpid(), parent_time);
 
         write(pipe_fd[1], message, strlen(message) + 1);
@@ -80,8 +81,8 @@ void fifo_example() {
             exit(EXIT_FAILURE);
         }
 
-        char buffer[BUFFER_SIZE / 2]; // Изменено
-        if (read(fifo_fd, buffer, BUFFER_SIZE / 2) > 0) { // Изменено
+        char buffer[BUFFER_SIZE];
+        if (read(fifo_fd, buffer, BUFFER_SIZE) > 0) {
             char child_time[BUFFER_SIZE];
             get_current_time(child_time, sizeof(child_time));
             printf("Дочерний процесс:\n");
@@ -99,10 +100,10 @@ void fifo_example() {
             exit(EXIT_FAILURE);
         }
 
-        char parent_time[BUFFER_SIZE];
+        char parent_time[BUFFER_SIZE/2];
         get_current_time(parent_time, sizeof(parent_time));
 
-        char message[BUFFER_SIZE / 2]; // Изменено
+        char message[BUFFER_SIZE];
         snprintf(message, sizeof(message), "PID: %d, Время: %s", getpid(), parent_time);
 
         write(fifo_fd, message, strlen(message) + 1);
@@ -110,7 +111,7 @@ void fifo_example() {
 
         wait(NULL);
         unlink(FIFO_NAME); 
-    }
+    }   
 }
 
 int main() {

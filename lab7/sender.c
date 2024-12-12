@@ -1,18 +1,19 @@
+// sender.c
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <semaphore.h>
-#include <signal.h>
 #include <time.h>
-#include <errno.h> // Подключаем для использования errno и EEXIST
+#include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <string.h>
+#include <sys/stat.h> // Для chmod
+#include <fcntl.h> // Для open
+#include <sys/file.h> // Для flock
+#include <errno.h>
 
-#define SHM_NAME "/shared_memory"
-#define SEM_NAME "/shared_semaphore"
-#define BUFFER_SIZE 256
+#define SHM_SIZE 256
+#define LOCKFILE "sender.lock"
+#define SHMFILE "shmfile"
 
 void get_current_time(char *buffer, size_t size) {
     time_t now = time(NULL);
@@ -21,72 +22,82 @@ void get_current_time(char *buffer, size_t size) {
 }
 
 void handle_existing_instance() {
-    printf("Программа уже запущена. Завершение.\n");
+    printf("Передающий процесс уже запущен. Завершение.\n");
     exit(EXIT_FAILURE);
 }
 
 int main() {
-    int shm_fd;
-    char *shared_memory;
-    sem_t *sem;
+    // Создаем или открываем lock-файл для предотвращения повторного запуска
+    int lock_fd = open(LOCKFILE, O_CREAT | O_RDWR, 0666);
+    if (lock_fd == -1) {
+        perror("Ошибка открытия lock-файла");
+        exit(EXIT_FAILURE);
+    }
 
-    // Проверяем, есть ли уже запущенная программа
-    sem = sem_open(SEM_NAME, O_CREAT | O_EXCL, 0666, 1);
-    if (sem == SEM_FAILED) {
-        if (errno == EEXIST) { // Обрабатываем ошибку существующего семафора
+    // Пытаемся захватить эксклюзивную блокировку
+    if (flock(lock_fd, LOCK_EX | LOCK_NB) == -1) {
+        if (errno == EWOULDBLOCK) {
             handle_existing_instance();
         } else {
-            perror("Ошибка создания семафора");
+            perror("Ошибка установки блокировки");
+            close(lock_fd);
             exit(EXIT_FAILURE);
         }
     }
 
-    // Создаём разделяемую память
-    shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
-    if (shm_fd == -1) {
-        perror("Ошибка создания разделяемой памяти");
-        sem_unlink(SEM_NAME);
+    // Убедимся, что shmfile существует
+    FILE *file = fopen(SHMFILE, "a");
+    if (!file) {
+        perror("Ошибка создания shmfile");
+        close(lock_fd);
+        exit(EXIT_FAILURE);
+    }
+    fclose(file);
+
+    // Установим права доступа, если файл был только что создан
+    chmod(SHMFILE, 0666);
+
+    // Генерация ключа для разделяемой памяти
+    key_t key = ftok(SHMFILE, 65);
+    if (key == -1) {
+        perror("Ошибка ftok");
+        close(lock_fd);
         exit(EXIT_FAILURE);
     }
 
-    // Задаём размер разделяемой памяти
-    if (ftruncate(shm_fd, BUFFER_SIZE) == -1) {
-        perror("Ошибка установки размера разделяемой памяти");
-        shm_unlink(SHM_NAME);
-        sem_unlink(SEM_NAME);
+    // Создание сегмента разделяемой памяти
+    int shmid = shmget(key, SHM_SIZE, 0666 | IPC_CREAT);
+    if (shmid == -1) {
+        perror("Ошибка shmget");
+        close(lock_fd);
         exit(EXIT_FAILURE);
     }
 
-    // Отображаем разделяемую память в адресное пространство
-    shared_memory = mmap(NULL, BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if (shared_memory == MAP_FAILED) {
-        perror("Ошибка отображения разделяемой памяти");
-        shm_unlink(SHM_NAME);
-        sem_unlink(SEM_NAME);
+    // Присоединение к разделяемой памяти
+    char *shared_memory = (char *)shmat(shmid, NULL, 0);
+    if (shared_memory == (char *)(-1)) {
+        perror("Ошибка shmat");
+        close(lock_fd);
         exit(EXIT_FAILURE);
     }
 
     printf("Передающий процесс запущен. PID: %d\n", getpid());
 
     while (1) {
-        char time_buffer[BUFFER_SIZE / 2]; // Для безопасности используем половину размера
+        char time_buffer[64];
         get_current_time(time_buffer, sizeof(time_buffer));
 
-        char message[BUFFER_SIZE];
-        snprintf(message, sizeof(message), "PID: %d, Время: %s", getpid(), time_buffer);
+        snprintf(shared_memory, SHM_SIZE, "PID: %d, Время: %s", getpid(), time_buffer);
 
-        sem_wait(sem);
-        strncpy(shared_memory, message, BUFFER_SIZE - 1); // Гарантируем, что строка будет null-terminated
-        shared_memory[BUFFER_SIZE - 1] = '\0'; // Явно добавляем завершающий нулевой символ
-        sem_post(sem);
-
-        sleep(1);
+        sleep(2); // Имитация работы
     }
 
-    // Очистка ресурсов
-    munmap(shared_memory, BUFFER_SIZE);
-    shm_unlink(SHM_NAME);
-    sem_unlink(SEM_NAME);
+    // Отключение от разделяемой памяти
+    shmdt(shared_memory);
+
+    // Удаляем блокировку при завершени и
+    close(lock_fd);
+    unlink(LOCKFILE);
 
     return 0;
 }
