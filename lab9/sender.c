@@ -9,13 +9,13 @@
 #include <sys/sem.h>
 #include <sys/stat.h> // Для chmod
 #include <fcntl.h> // Для open
-#include <sys/file.h> // Для flock
+#include <sys/file.h> 
 #include <errno.h>
 
 #define SHM_SIZE 256
-#define LOCKFILE "sender.lock"
-#define SHMFILE "shmfile"
-#define SEMFILE "semfile"
+#define LOCKFILE "./sender.lock"
+#define SHMFILE "./shmfile"
+#define SEMFILE "./semfile"
 
 void get_current_time(char *buffer, size_t size) {
     time_t now = time(NULL);

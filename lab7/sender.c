@@ -11,8 +11,8 @@
 #include <errno.h>
 
 #define SHM_SIZE 256
-#define LOCKFILE "/sender.lock" // Файл блокировки в /tmp
-#define SHMFILE "/shmfile"      // shmfile также в /tmp
+#define LOCKFILE "./sender.lock" 
+#define SHMFILE "./shmfile"      
 
 void get_current_time(char *buffer, size_t size) {
     time_t now = time(NULL);

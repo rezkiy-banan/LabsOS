@@ -36,7 +36,7 @@ void* reader_thread(void* arg) {
         printf("Reader %ld: %s\n", tid, shared_array);
 
         pthread_rwlock_unlock(&rwlock);
-        usleep(100000); // Задержка для предотвращения "забивания" вывода
+        usleep(1000000); // Задержка для предотвращения "забивания" вывода
     }
     return NULL;
 }

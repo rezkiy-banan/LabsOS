@@ -38,15 +38,15 @@ void* reader_thread(void* arg) {
         pthread_mutex_lock(&mutex);
 
         // Ожидание обновления общего массива
-        while (!updated) {
-            pthread_cond_wait(&cond, &mutex);
-        }
+        //while (!updated) {
+        pthread_cond_wait(&cond, &mutex);
+        
 
         // Чтение общего массива
         printf("Reader %ld: %s\n", tid, shared_array);
 
         pthread_mutex_unlock(&mutex);
-        usleep(100000); // Задержка для предотвращения "забивания" вывода
+       // usleep(100000); // Задержка для предотвращения "забивания" вывода
     }
     return NULL;
 }
