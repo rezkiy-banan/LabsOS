@@ -1,4 +1,3 @@
-// sender.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -6,14 +5,14 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <string.h>
-#include <sys/stat.h> // Для chmod
-#include <fcntl.h> // Для open
-#include <sys/file.h> // Для flock
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/file.h>
 #include <errno.h>
 
 #define SHM_SIZE 256
-#define LOCKFILE "sender.lock"
-#define SHMFILE "shmfile"
+#define LOCKFILE "/sender.lock" // Файл блокировки в /tmp
+#define SHMFILE "/shmfile"      // shmfile также в /tmp
 
 void get_current_time(char *buffer, size_t size) {
     time_t now = time(NULL);
@@ -27,14 +26,14 @@ void handle_existing_instance() {
 }
 
 int main() {
-    // Создаем или открываем lock-файл для предотвращения повторного запуска
+    // Создаем или открываем lock-файл
     int lock_fd = open(LOCKFILE, O_CREAT | O_RDWR, 0666);
     if (lock_fd == -1) {
         perror("Ошибка открытия lock-файла");
         exit(EXIT_FAILURE);
     }
 
-    // Пытаемся захватить эксклюзивную блокировку
+    // Захват блокировки
     if (flock(lock_fd, LOCK_EX | LOCK_NB) == -1) {
         if (errno == EWOULDBLOCK) {
             handle_existing_instance();
@@ -45,16 +44,15 @@ int main() {
         }
     }
 
-    // Убедимся, что shmfile существует
+    // Создание shmfile
     FILE *file = fopen(SHMFILE, "a");
     if (!file) {
         perror("Ошибка создания shmfile");
         close(lock_fd);
+        unlink(LOCKFILE);
         exit(EXIT_FAILURE);
     }
     fclose(file);
-
-    // Установим права доступа, если файл был только что создан
     chmod(SHMFILE, 0666);
 
     // Генерация ключа для разделяемой памяти
@@ -62,6 +60,7 @@ int main() {
     if (key == -1) {
         perror("Ошибка ftok");
         close(lock_fd);
+        unlink(LOCKFILE);
         exit(EXIT_FAILURE);
     }
 
@@ -70,6 +69,7 @@ int main() {
     if (shmid == -1) {
         perror("Ошибка shmget");
         close(lock_fd);
+        unlink(LOCKFILE);
         exit(EXIT_FAILURE);
     }
 
@@ -78,6 +78,7 @@ int main() {
     if (shared_memory == (char *)(-1)) {
         perror("Ошибка shmat");
         close(lock_fd);
+        unlink(LOCKFILE);
         exit(EXIT_FAILURE);
     }
 
@@ -92,10 +93,8 @@ int main() {
         sleep(2); // Имитация работы
     }
 
-    // Отключение от разделяемой памяти
+    // Завершение
     shmdt(shared_memory);
-
-    // Удаляем блокировку при завершени и
     close(lock_fd);
     unlink(LOCKFILE);
 
