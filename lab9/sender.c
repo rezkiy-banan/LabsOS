@@ -1,16 +1,15 @@
-// sender.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#include <string.h>
 #include <sys/sem.h>
-#include <sys/stat.h> // Для chmod
-#include <fcntl.h> // Для open
-#include <sys/file.h> 
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/file.h>
 #include <errno.h>
+#include <string.h>
 
 #define SHM_SIZE 256
 #define LOCKFILE "./sender.lock"
@@ -28,7 +27,6 @@ void handle_existing_instance() {
     exit(EXIT_FAILURE);
 }
 
-// Функция для управления семафором
 void sem_operation(int semid, int op) {
     struct sembuf sb = {0, op, 0};
     if (semop(semid, &sb, 1) == -1) {
@@ -38,14 +36,13 @@ void sem_operation(int semid, int op) {
 }
 
 int main() {
-    // Создаем или открываем lock-файл для предотвращения повторного запуска
+    // Создаём или открываем lock-файл
     int lock_fd = open(LOCKFILE, O_CREAT | O_RDWR, 0666);
     if (lock_fd == -1) {
         perror("Ошибка открытия lock-файла");
         exit(EXIT_FAILURE);
     }
 
-    // Пытаемся захватить эксклюзивную блокировку
     if (flock(lock_fd, LOCK_EX | LOCK_NB) == -1) {
         if (errno == EWOULDBLOCK) {
             handle_existing_instance();
@@ -64,13 +61,12 @@ int main() {
         exit(EXIT_FAILURE);
     }
     fclose(file);
-
-    // Установим права доступа, если файл был только что создан
     chmod(SHMFILE, 0666);
 
-    // Генерация ключа для разделяемой памяти
+    // Генерация ключей для разделяемой памяти и семафора
     key_t shm_key = ftok(SHMFILE, 65);
-    if (shm_key == -1) {
+    key_t sem_key = ftok(SEMFILE, 66);
+    if (shm_key == -1 || sem_key == -1) {
         perror("Ошибка ftok");
         close(lock_fd);
         exit(EXIT_FAILURE);
@@ -93,13 +89,6 @@ int main() {
     }
 
     // Создание или получение семафора
-    key_t sem_key = ftok(SEMFILE, 66);
-    if (sem_key == -1) {
-        perror("Ошибка ftok для семафора");
-        close(lock_fd);
-        exit(EXIT_FAILURE);
-    }
-
     int semid = semget(sem_key, 1, 0666 | IPC_CREAT);
     if (semid == -1) {
         perror("Ошибка создания семафора");
@@ -130,7 +119,17 @@ int main() {
     // Отключение от разделяемой памяти
     shmdt(shared_memory);
 
-    // Удаляем блокировку при завершении
+    // Удаление сегмента памяти
+    if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+        perror("Ошибка удаления сегмента разделяемой памяти");
+    }
+
+    // Удаление семафора
+    if (semctl(semid, 0, IPC_RMID) == -1) {
+        perror("Ошибка удаления семафора");
+    }
+
+    // Удаление блокировки
     close(lock_fd);
     unlink(LOCKFILE);
 

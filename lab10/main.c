@@ -75,7 +75,7 @@ int main() {
         pthread_join(readers[i], NULL);
     }
 
-    pthread_mutex_destroy(&mutex);
+    
     pthread_cond_destroy(&cond);
 
     return EXIT_SUCCESS;
