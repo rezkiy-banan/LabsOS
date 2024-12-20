@@ -11,8 +11,8 @@
 #include <errno.h>
 
 #define SHM_SIZE 256
-#define LOCKFILE "./sender.lock" 
-#define SHMFILE "./shmfile"      
+#define LOCKFILE "./sender.lock"
+#define SHMFILE "./shmfile"
 
 void get_current_time(char *buffer, size_t size) {
     time_t now = time(NULL);
@@ -93,8 +93,17 @@ int main() {
         sleep(2); // Имитация работы
     }
 
-    // Завершение
-    shmdt(shared_memory);
+    // Отключение от разделяемой памяти
+    if (shmdt(shared_memory) == -1) {
+        perror("Ошибка отключения от разделяемой памяти");
+    }
+
+    // Удаление сегмента разделяемой памяти
+    if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+        perror("Ошибка удаления сегмента разделяемой памяти");
+    }
+
+    // Удаление блокировки
     close(lock_fd);
     unlink(LOCKFILE);
 

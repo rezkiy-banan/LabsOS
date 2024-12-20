@@ -76,7 +76,6 @@ int main() {
     }
 
     
-    pthread_cond_destroy(&cond);
 
     return EXIT_SUCCESS;
 }
